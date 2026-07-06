@@ -2,18 +2,28 @@
 
 [![smithery badge](https://smithery.ai/badge/agentbodega/agentbodega)](https://smithery.ai/servers/agentbodega/agentbodega)
 
-Give agents a live menu of paid, x402-ready data tools from
+Give agents a live menu of paid, x402-ready tools from
 [AgentBodega](https://agentbodega.store).
 
-This MCP server lets agents discover what AgentBodega sells, compare endpoint
-prices, inspect required inputs and response formats, and generate ready-to-run
-x402 HTTP calls. Agents get the buying instructions for each resource without
-guessing schemas or scraping docs, while execution stays on AgentBodega's hosted
-endpoints where payment settlement, receipts, and fresh catalog metadata are
-handled by the service.
+This MCP server lets agents discover AgentBodega endpoints, compare prices,
+inspect required inputs and response formats, and generate ready-to-run x402
+HTTP calls. Agents get the buying instructions for each resource without
+guessing schemas or scraping docs.
 
 This public repository contains only the AgentBodega MCP package. The hosted
 AgentBodega API runs separately at [agentbodega.store](https://agentbodega.store).
+
+## What Agents Can Find
+
+- Social media lookups and research tools.
+- Real-estate listing search.
+- Service status and cloud status checks.
+- Domain, launch-readiness, and agent-discoverability audits.
+- x402 inspection, directory packaging, and hosted artifact utilities.
+
+The MCP server does not execute paid calls. It returns the endpoint contract,
+example request, payment requirements, and snippets an agent can run against the
+hosted API.
 
 ## Install
 
@@ -27,7 +37,7 @@ Remote MCP clients that support Streamable HTTP can connect directly to:
 https://agentbodega.store/mcp
 ```
 
-Older clients and directory forms that still ask for SSE can use:
+SSE endpoint:
 
 ```text
 https://agentbodega.store/mcp/sse
@@ -44,9 +54,7 @@ AGENTBODEGA_BASE_URL=https://agentbodega.store
 This package intentionally uses outbound HTTPS requests at runtime to read
 AgentBodega's live catalog, x402 discovery document, and OpenAPI contract. It
 does not run install scripts, spawn shells, bundle dependencies, or execute paid
-calls. By default it connects to `https://agentbodega.store`; set
-`AGENTBODEGA_BASE_URL` only when you want to point the MCP server at another
-AgentBodega deployment.
+calls. By default it connects to `https://agentbodega.store`.
 
 ## Claude Desktop
 
@@ -76,7 +84,7 @@ AgentBodega deployment.
   and x402 verification notes. It does not fetch a challenge, pay, or execute.
 - `agentbodega_payment_guide` - use when an agent needs the AgentBodega payment
   model before making paid HTTP calls. It explains x402 discovery, settlement,
-  blockchain-only balance policy, and optional challenge curl.
+  and optional challenge curl.
 
 ## Resources
 
