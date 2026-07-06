@@ -1,0 +1,58 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.agentbodegastore/agentbodega-mcp",
+  "title": "AgentBodega MCP",
+  "description": "Discover AgentBodega paid data tools, contracts, and x402 HTTP call snippets.",
+  "status": "active",
+  "repository": {
+    "url": "https://github.com/agentbodegastore/agentbodega",
+    "source": "github",
+    "id": "agentbodegastore/agentbodega"
+  },
+  "websiteUrl": "https://agentbodega.store",
+  "version": "0.1.6",
+  "icons": [
+    {
+      "src": "https://agentbodega.store/favicon.ico",
+      "mimeType": "image/png",
+      "sizes": [
+        "48x48"
+      ]
+    },
+    {
+      "src": "https://agentbodega.store/favicon.svg",
+      "mimeType": "image/svg+xml",
+      "sizes": [
+        "any"
+      ]
+    }
+  ],
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "@agentbodega/mcp",
+      "version": "0.1.6",
+      "transport": {
+        "type": "stdio"
+      },
+      "runtimeHint": "npx",
+      "runtimeArguments": [
+        {
+          "type": "positional",
+          "value": "-y"
+        }
+      ],
+      "packageArguments": [],
+      "environmentVariables": [
+        {
+          "name": "AGENTBODEGA_BASE_URL",
+          "description": "Optional AgentBodega service URL. Defaults to https://agentbodega.store.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}

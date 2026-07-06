@@ -1,0 +1,49 @@
+{
+  "name": "@agentbodega/mcp",
+  "version": "0.1.6",
+  "mcpName": "io.github.agentbodegastore/agentbodega-mcp",
+  "description": "Discover AgentBodega paid data tools, contracts, and x402 HTTP call snippets.",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://agentbodega.store",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/agentbodegastore/agentbodega.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "bugs": {
+    "url": "https://github.com/agentbodegastore/agentbodega/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "x402",
+    "agentbodega",
+    "agent-tools",
+    "public-data",
+    "status"
+  ],
+  "bin": {
+    "agentbodega-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md",
+    "server.json"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && chmod +x dist/index.js",
+    "test": "npm run build && node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@types/node": "^24.0.10",
+    "typescript": "^5.8.3"
+  }
+}
