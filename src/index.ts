@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const VERSION = "0.1.6";
+const VERSION = "0.1.7";
 const DEFAULT_BASE_URL = "https://agentbodega.store";
 const INSTRUCTIONS =
   "Use this server to discover AgentBodega offerings, inspect accepted inputs and examples, and generate HTTP/x402 call snippets. Do not use it to execute paid calls directly.";
@@ -34,6 +34,7 @@ type DirectoryEndpoint = {
   outputSchema?: JsonObject;
   outputExample?: unknown;
   balanceModel?: JsonObject;
+  paymentSurfaces?: JsonObject;
 };
 
 type Directory = {
@@ -42,6 +43,7 @@ type Directory = {
   directory?: string;
   openapi?: string;
   x402?: string;
+  l402?: string;
   llmsTxt?: string;
   settlement?: JsonObject;
   endpoints?: DirectoryEndpoint[];
@@ -78,6 +80,23 @@ async function fetchJson<T>(path: string): Promise<T> {
       accept: "application/json",
       "user-agent": `agentbodega-mcp/${VERSION}`
     }
+  });
+  if (!response.ok) {
+    throw new Error(`AgentBodega request failed: ${response.status} ${response.statusText} for ${url}`);
+  }
+  return (await response.json()) as T;
+}
+
+async function postJson<T>(path: string, body: JsonObject): Promise<T> {
+  const url = path.startsWith("http") ? path : `${baseUrl()}${path}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      "user-agent": `agentbodega-mcp/${VERSION}`
+    },
+    body: JSON.stringify(body)
   });
   if (!response.ok) {
     throw new Error(`AgentBodega request failed: ${response.status} ${response.statusText} for ${url}`);
@@ -129,6 +148,7 @@ function compactEndpoint(endpoint: DirectoryEndpoint): JsonObject {
     url: endpoint.url,
     price: endpoint.price,
     balanceModel: endpoint.balanceModel,
+    paymentSurfaces: endpoint.paymentSurfaces,
     category: endpoint.category || endpoint.department,
     tags: endpoint.tags || [],
     description: endpoint.description,
@@ -226,6 +246,7 @@ const data = await response.json();`;
     endpoint: compactEndpoint(endpoint),
     payment: {
       mode: "x402",
+      surfaces: endpoint.paymentSurfaces,
       balanceModel: endpoint.balanceModel || { mode: "per_call_x402", sourceOfTruth: "blockchain_settlement" },
       note: "Fetch the live 402 challenge from this endpoint before paying. Verify price, network, asset, and payTo in the challenge."
     },
@@ -235,6 +256,44 @@ const data = await response.json();`;
 }
 
 const toolDefinitions = [
+  {
+    name: "agentbodega_plan_task",
+    title: "Plan Cheapest AgentBodega Route",
+    description:
+      "Use this before search_catalog when you have a plain-language task and want AgentBodega to choose the best matching paid route at the lowest useful cost. It calls the free /api/plan planner, returns a recommended endpoint, alternatives, required inputs, examples, and x402 handoff notes. It never executes paid endpoints or creates payments.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["task"],
+      properties: {
+        task: {
+          type: "string",
+          minLength: 1,
+          maxLength: 2000,
+          description:
+            "Plain-language task to solve with AgentBodega routes, for example: check whether my deploy failure is caused by GitHub, npm, Vercel, Supabase, or OpenAI."
+        },
+        budgetUsd: {
+          type: "number",
+          minimum: 0,
+          description: "Optional maximum per-call spend for the recommended paid route. The planner itself remains free."
+        },
+        prefer: {
+          type: "string",
+          enum: ["lowest_cost", "best_match", "fewest_calls"],
+          default: "lowest_cost",
+          description: "Ranking preference for route selection."
+        },
+        limit: {
+          type: "integer",
+          minimum: 1,
+          maximum: 10,
+          default: 5,
+          description: "Maximum number of recommendations to return."
+        }
+      }
+    }
+  },
   {
     name: "agentbodega_search_catalog",
     title: "Search AgentBodega Catalog",
@@ -320,7 +379,7 @@ const toolDefinitions = [
     name: "agentbodega_payment_guide",
     title: "AgentBodega Payment Guide",
     description:
-      "Use this when an agent needs to understand how AgentBodega x402 payment discovery and settlement work before making paid HTTP calls. It explains the blockchain-settled per-call model, discovery URLs, balance source of truth, optional owner-approved savings offers, and an optional sample challenge request. It does not validate wallets, issue discounts, or perform payments.",
+      "Use this when an agent needs to understand how AgentBodega x402 and L402 payment discovery work before making paid HTTP calls. It explains the blockchain-settled per-call model, discovery URLs, balance source of truth, optional owner-approved savings offers, and an optional sample challenge request. It does not validate wallets, issue discounts, or perform payments.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -351,6 +410,13 @@ const resources = [
     mimeType: "application/json"
   },
   {
+    uri: "agentbodega://l402",
+    name: "agentbodega_l402",
+    title: "AgentBodega L402 Discovery",
+    description: "Live /.well-known/l402-services document.",
+    mimeType: "application/json"
+  },
+  {
     uri: "agentbodega://openapi",
     name: "agentbodega_openapi",
     title: "AgentBodega OpenAPI",
@@ -375,6 +441,15 @@ const prompts = [
 ];
 
 async function callTool(name: string, args: JsonObject): Promise<JsonObject> {
+  if (name === "agentbodega_plan_task") {
+    const task = requiredString(args, "task");
+    const budgetUsd = numberArg(args, "budgetUsd");
+    const prefer = stringArg(args, "prefer", "lowest_cost");
+    const limit = positiveIntegerArg(args, "limit", 5, 1, 10);
+    const planned = await postJson<JsonObject>("/api/plan", { task, budgetUsd, prefer, limit });
+    return toolJson(planned);
+  }
+
   if (name === "agentbodega_search_catalog") {
     const current = await directory();
     const query = stringArg(args, "query");
@@ -417,10 +492,16 @@ async function callTool(name: string, args: JsonObject): Promise<JsonObject> {
     return toolJson({
       mode: "per_call_x402",
       sourceOfTruth: "blockchain_settlement",
+      additionalSurface: {
+        protocol: "l402",
+        discovery: `${origin}/.well-known/l402-services`,
+        note: "Use L402 only when the discovery document reports a configured issuer; otherwise treat it as a discovery and handoff surface while paid fulfillment remains x402-backed."
+      },
       policy:
         "AgentBodega does not advertise off-chain stored-value balances. Reusable balances require an on-chain USDC escrow or allowance contract where deposits and debits are verifiable on-chain.",
       endpoints: {
         discovery: `${origin}/.well-known/x402`,
+        l402: `${origin}/.well-known/l402-services`,
         openapi: `${origin}/openapi.json`,
         directory: `${origin}/api/directory`,
         referrals: `${origin}/api/referrals/catalog`
@@ -470,6 +551,11 @@ async function readResource(uri: string): Promise<JsonObject> {
     return { contents: [{ uri, mimeType: "application/json", text: jsonText(current) }] };
   }
 
+  if (uri === "agentbodega://l402") {
+    const current = await fetchJson<JsonObject>("/.well-known/l402-services");
+    return { contents: [{ uri, mimeType: "application/json", text: jsonText(current) }] };
+  }
+
   if (uri === "agentbodega://openapi") {
     const current = await fetchJson<JsonObject>("/openapi.json");
     return { contents: [{ uri, mimeType: "application/json", text: jsonText(current) }] };
@@ -490,7 +576,7 @@ function getPrompt(name: string, args: JsonObject): JsonObject {
           text:
             `Task: ${task}\n\n` +
             "Use agentbodega_search_catalog to find candidate endpoints. Use agentbodega_get_endpoint to inspect required inputs and examples. " +
-            "Use agentbodega_payment_guide to surface optional savings offers before payment. Use agentbodega_call_snippet to produce the HTTP request. " +
+            "Use agentbodega_payment_guide to inspect x402 and L402 discovery and surface optional savings offers before payment. Use agentbodega_call_snippet to produce the HTTP request. " +
             "Do not execute paid calls or social promo actions through MCP; ask the user to confirm the live x402 challenge and approve any exact external action first."
         }
       }

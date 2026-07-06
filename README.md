@@ -6,9 +6,9 @@ Give agents a live menu of paid, x402-ready tools from
 [AgentBodega](https://agentbodega.store).
 
 This MCP server lets agents discover AgentBodega endpoints, compare prices,
-inspect required inputs and response formats, and generate ready-to-run x402
-HTTP calls. Agents get the buying instructions for each resource without
-guessing schemas or scraping docs.
+plan the cheapest useful route for a task, inspect required inputs and response
+formats, and generate ready-to-run x402 HTTP calls. Agents get the buying
+instructions for each resource without guessing schemas or scraping docs.
 
 This public repository contains only the AgentBodega MCP package. The hosted
 AgentBodega API runs separately at [agentbodega.store](https://agentbodega.store).
@@ -23,7 +23,9 @@ AgentBodega API runs separately at [agentbodega.store](https://agentbodega.store
 
 The MCP server does not execute paid calls. It returns the endpoint contract,
 example request, payment requirements, and snippets an agent can run against the
-hosted API.
+hosted API. L402 is exposed as an additional discovery and payment-handoff
+surface; agents should treat it as discovery-only unless the live L402 document
+reports a configured issuer.
 
 ## Install
 
@@ -52,9 +54,10 @@ AGENTBODEGA_BASE_URL=https://agentbodega.store
 ## Network access
 
 This package intentionally uses outbound HTTPS requests at runtime to read
-AgentBodega's live catalog, x402 discovery document, and OpenAPI contract. It
-does not run install scripts, spawn shells, bundle dependencies, or execute paid
-calls. By default it connects to `https://agentbodega.store`.
+AgentBodega's live catalog, x402 discovery document, L402 discovery document,
+and OpenAPI contract. It does not run install scripts, spawn shells, bundle
+dependencies, or execute paid calls. By default it connects to
+`https://agentbodega.store`.
 
 ## Claude Desktop
 
@@ -71,6 +74,11 @@ calls. By default it connects to `https://agentbodega.store`.
 
 ## Tools
 
+- `agentbodega_plan_task` - use first when an agent has a plain-language task
+  and wants AgentBodega to choose the cheapest useful route. It calls the free
+  `/api/plan` planner and returns a recommended endpoint, alternatives,
+  required inputs, examples, and x402 handoff notes. It never executes paid
+  calls.
 - `agentbodega_search_catalog` - use first to find the right paid endpoint. It
   searches the live directory by text, department/category/tag, and maximum
   USD price, then returns endpoint summaries with required inputs and example
@@ -83,13 +91,15 @@ calls. By default it connects to `https://agentbodega.store`.
   ready-to-edit curl and JavaScript requests with an `X-PAYMENT` placeholder
   and x402 verification notes. It does not fetch a challenge, pay, or execute.
 - `agentbodega_payment_guide` - use when an agent needs the AgentBodega payment
-  model before making paid HTTP calls. It explains x402 discovery, settlement,
-  and optional challenge curl.
+  model before making paid HTTP calls. It explains x402 discovery, L402 handoff
+  status, settlement, blockchain-only balance policy, and optional challenge
+  curl.
 
 ## Resources
 
 - `agentbodega://catalog` - compact live catalog.
 - `agentbodega://x402` - live x402 discovery document.
+- `agentbodega://l402` - live L402 discovery document.
 - `agentbodega://openapi` - live OpenAPI document.
 
 ## Development

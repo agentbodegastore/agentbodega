@@ -1,8 +1,8 @@
 {
   "name": "@agentbodega/mcp",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "mcpName": "io.github.agentbodegastore/agentbodega-mcp",
-  "description": "Discover AgentBodega paid data tools, contracts, and x402 HTTP call snippets.",
+  "description": "Discover AgentBodega paid data tools, task plans, contracts, and x402 HTTP call snippets.",
   "type": "module",
   "license": "MIT",
   "homepage": "https://agentbodega.store",

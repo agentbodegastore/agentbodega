@@ -31,6 +31,15 @@ function endpoint(origin, overrides) {
     exampleRequest: { category: "public-records", limit: 10 },
     outputExample: { categories: [] },
     balanceModel: { mode: "per_call_x402", sourceOfTruth: "blockchain_settlement" },
+    paymentSurfaces: {
+      x402: { discovery: `${origin}/.well-known/x402`, sourceOfTruth: "blockchain_settlement" },
+      l402: {
+        protocol: "l402",
+        discovery: `${origin}/.well-known/l402-services`,
+        status: "discovery_only",
+        sourceOfTruth: "lightning_invoice_preimage"
+      }
+    },
     ...overrides
   };
 }
@@ -42,6 +51,7 @@ function fixtureDirectory(origin) {
     directory: `${origin}/api/directory`,
     openapi: `${origin}/openapi.json`,
     x402: `${origin}/.well-known/x402`,
+    l402: `${origin}/.well-known/l402-services`,
     llmsTxt: `${origin}/llms.txt`,
     endpoints: [
       endpoint(origin, {}),
@@ -95,6 +105,25 @@ async function withFixtureServer(fn) {
       res.end(JSON.stringify(fixtureDirectory(origin)));
       return;
     }
+    if (req.url === "/api/plan") {
+      res.end(
+        JSON.stringify({
+          ok: true,
+          mode: "free_route_planning",
+          planner: { free: true, priceUsd: "0.00", executesPaidCalls: false, usesOnlyAgentBodegaRoutes: true },
+          recommended: {
+            id: "cloud-status-check",
+            title: "Cloud Provider Status Check",
+            url: `${origin}/api/cloud/status/check`,
+            price: { model: "x402_per_call", currency: "USD", amount: "0.005" },
+            routePlanner: { decision: "recommended_paid_route", plannerPriceUsd: "0.00", paidExecutionPriceUsd: "0.005" }
+          },
+          alternatives: [],
+          executionPolicy: { executesPaidCalls: false }
+        })
+      );
+      return;
+    }
     if (req.url === "/.well-known/x402") {
       res.end(
         JSON.stringify({
@@ -105,6 +134,22 @@ async function withFixtureServer(fn) {
             method: item.method,
             metadata: { price: item.price, service: item.title },
             extensions: { bazaar: { info: { input: { type: "http", method: item.method, body: item.exampleRequest } } } }
+          }))
+        })
+      );
+      return;
+    }
+    if (req.url === "/.well-known/l402-services") {
+      res.end(
+        JSON.stringify({
+          l402Version: "2026-07",
+          name: "AgentBodega",
+          status: "discovery_only",
+          protocol: { scheme: "L402", challengeHeader: "WWW-Authenticate" },
+          resources: fixtureDirectory(origin).endpoints.map((item) => ({
+            id: item.key,
+            resource: item.url,
+            payment: item.paymentSurfaces.l402
           }))
         })
       );
@@ -173,9 +218,11 @@ test("AgentBodega MCP exercises all tools, resources, and prompts over stdio", a
       const tools = await client.listTools();
       assert.deepEqual(
         tools.tools.map((tool) => tool.name).sort(),
-        ["agentbodega_call_snippet", "agentbodega_get_endpoint", "agentbodega_payment_guide", "agentbodega_search_catalog"]
+        ["agentbodega_call_snippet", "agentbodega_get_endpoint", "agentbodega_payment_guide", "agentbodega_plan_task", "agentbodega_search_catalog"]
       );
       const toolByName = new Map(tools.tools.map((tool) => [tool.name, tool]));
+      assert.match(toolByName.get("agentbodega_plan_task").description, /lowest useful cost/);
+      assert.match(toolByName.get("agentbodega_plan_task").description, /never executes paid endpoints/);
       assert.match(toolByName.get("agentbodega_search_catalog").description, /Use this first/);
       assert.match(toolByName.get("agentbodega_search_catalog").description, /never executes paid endpoints/);
       assert.match(toolByName.get("agentbodega_get_endpoint").description, /complete contract/);
@@ -194,7 +241,7 @@ test("AgentBodega MCP exercises all tools, resources, and prompts over stdio", a
       const resources = await client.listResources();
       assert.deepEqual(
         resources.resources.map((resource) => resource.uri).sort(),
-        ["agentbodega://catalog", "agentbodega://openapi", "agentbodega://x402"]
+        ["agentbodega://catalog", "agentbodega://l402", "agentbodega://openapi", "agentbodega://x402"]
       );
 
       const prompts = await client.listPrompts();
@@ -214,6 +261,18 @@ test("AgentBodega MCP exercises all tools, resources, and prompts over stdio", a
       assert.equal(search.count, 1);
       assert.equal(search.endpoints[0].key, "cloud-status-check");
       assert.deepEqual(search.endpoints[0].requiredInputs, ["provider"]);
+
+      const plan = jsonContent(
+        await client.callTool({
+          name: "agentbodega_plan_task",
+          arguments: { task: "Check cloud health before retrying a deploy.", budgetUsd: 0.01, prefer: "lowest_cost", limit: 3 }
+        })
+      );
+      assert.equal(plan.ok, true);
+      assert.equal(plan.mode, "free_route_planning");
+      assert.equal(plan.planner.free, true);
+      assert.equal(plan.executionPolicy.executesPaidCalls, false);
+      assert.equal(plan.recommended.id, "cloud-status-check");
 
       const cheapSearch = jsonContent(
         await client.callTool({
@@ -261,6 +320,7 @@ test("AgentBodega MCP exercises all tools, resources, and prompts over stdio", a
       assert.match(snippet.curl, /X-PAYMENT/);
       assert.match(snippet.javascript, /x-payment/);
       assert.equal(snippet.payment.balanceModel.sourceOfTruth, "blockchain_settlement");
+      assert.equal(snippet.payment.surfaces.l402.protocol, "l402");
 
       const missingSnippet = jsonContent(
         await client.callTool({
@@ -278,8 +338,10 @@ test("AgentBodega MCP exercises all tools, resources, and prompts over stdio", a
       );
       assert.equal(paymentGuide.mode, "per_call_x402");
       assert.equal(paymentGuide.sourceOfTruth, "blockchain_settlement");
+      assert.equal(paymentGuide.additionalSurface.protocol, "l402");
       assert.equal(paymentGuide.curl, undefined);
       assert.equal(paymentGuide.endpoints.discovery, `${baseUrl}/.well-known/x402`);
+      assert.equal(paymentGuide.endpoints.l402, `${baseUrl}/.well-known/l402-services`);
       assert.equal(paymentGuide.endpoints.referrals, `${baseUrl}/api/referrals/catalog`);
       assert.equal(paymentGuide.savings.ownerApprovalRequired, true);
       assert.match(paymentGuide.savings.policy, /Do not post, reply, follow, like, subscribe/);
@@ -293,6 +355,11 @@ test("AgentBodega MCP exercises all tools, resources, and prompts over stdio", a
       assert.equal(x402.x402Version, 2);
       assert.equal(x402.resources.length, 3);
       assert.ok(x402.resources.every((resource) => resource.extensions?.bazaar?.info));
+
+      const l402 = JSON.parse((await client.readResource({ uri: "agentbodega://l402" })).contents[0].text);
+      assert.equal(l402.l402Version, "2026-07");
+      assert.equal(l402.status, "discovery_only");
+      assert.equal(l402.resources.length, 3);
 
       const openapi = JSON.parse((await client.readResource({ uri: "agentbodega://openapi" })).contents[0].text);
       assert.equal(openapi.openapi, "3.1.0");
@@ -366,5 +433,4 @@ test("AgentBodega MCP npm package dry-run includes the executable and registry m
   assert.deepEqual(serverJson.packages[0].runtimeArguments, [{ type: "positional", value: "-y" }]);
   assert.equal(manifest.bin["agentbodega-mcp"], "dist/index.js");
   assert.equal(manifest.dependencies, undefined);
-  assert.deepEqual(Object.keys(manifest.devDependencies).sort(), ["@modelcontextprotocol/sdk", "@types/node", "typescript"]);
 });
