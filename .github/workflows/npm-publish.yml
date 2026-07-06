@@ -27,6 +27,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: "24"
+          registry-url: "https://registry.npmjs.org"
           package-manager-cache: false
 
       - name: Use latest npm
@@ -65,7 +66,7 @@ jobs:
 
       - name: Publish
         if: (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)) && steps.npm-version.outputs.published != 'true'
-        run: npm publish --access public --provenance
+        run: npm publish --access public
 
       - name: Authenticate to MCP Registry
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)
