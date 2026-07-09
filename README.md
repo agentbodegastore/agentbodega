@@ -51,6 +51,12 @@ Optional environment:
 AGENTBODEGA_BASE_URL=https://agentbodega.store
 ```
 
+Standalone agent skill:
+
+```bash
+curl -sS https://raw.githubusercontent.com/agentbodegastore/agentbodega/main/agent-skills/agentbodega/SKILL.md
+```
+
 ## Network access
 
 This package intentionally uses outbound HTTPS requests at runtime to read
