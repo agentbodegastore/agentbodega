@@ -1,6 +1,6 @@
 # AgentBodega MCP
 
-[![smithery badge](https://smithery.ai/badge/agentbodega/agentbodega)](https://smithery.ai/servers/agentbodega/agentbodega)
+[![LightNow capabilities](https://lightnow.ai/badge/io.github.agentbodegastore/agentbodega-mcp)](https://lightnow.ai/servers/io.github.agentbodegastore/agentbodega-mcp)
 
 Give agents a live menu of paid, x402-ready tools from
 [AgentBodega](https://agentbodega.store).
